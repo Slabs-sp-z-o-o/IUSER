@@ -1,0 +1,12 @@
+serie,database,table,column
+ghi,iot_warehouse,weather_forecasts,ghi
+ghi90,iot_warehouse,weather_forecasts,ghi90
+ghi10,iot_warehouse,weather_forecasts,ghi10
+dni,iot_warehouse,weather_forecasts,dni
+dni90,iot_warehouse,weather_forecasts,dni90
+dni10,iot_warehouse,weather_forecasts,dni10
+dhi,iot_warehouse,weather_forecasts,dhi
+air_temp,iot_warehouse,weather_forecasts,air_temp
+zenith,iot_warehouse,weather_forecasts,zenith
+azimuth,iot_warehouse,weather_forecasts,azimuth
+cloud_opacity,iot_warehouse,weather_forecasts,cloud_opacity

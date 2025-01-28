@@ -1,0 +1,83 @@
+pipeline {
+
+    agent {
+        label 'iuser_build'
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Code Quality') {
+
+            agent {
+                dockerfile {
+                    dir 'utils/docker_flake8'
+                    args '--entrypoint='
+                    reuseNode true
+                }
+            }
+            steps {
+                sh '''
+                    # flake8 --exit-zero --format=junit-xml --output-file=flake8-junit.xml
+                    flake8 --exit-zero --format=dashboard --outputdir=flake/dashboard --title="PWRAbility Python code dashboard"
+                    # remove --exit-zero below to mark job as failed based on flake8 status
+                    flake8 --exit-zero --format=html --htmldir=flake/report --statistics --count
+                '''
+            }
+            post {
+                always {
+                    // junit 'flake8-junit.xml'
+                    publishHTML (target : [alwaysLinkToLastBuild: true, keepAll: true,
+                        reportDir: 'flake',
+                        reportFiles: 'report/index.html,dashboard/index.html',
+                        reportName: 'Python Code Quality',
+                        reportTitles: 'Report,Dashboard'])
+                }
+            }
+        }
+        stage('Fixtures Tests') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'PWRABILITY_GCP_DEV', variable: 'GOOGLE_CREDENTIALS_PATH'),
+                ]) {
+                    sh "./run_tests_on_dev_in_docker.sh tests/rest_api"
+                }
+            }
+        }
+        stage('E2E Tests') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'PWRABILITY_GCP_DEV', variable: 'GOOGLE_CREDENTIALS_PATH'),
+                ]) {
+                    sh "./run_tests_on_dev_in_docker.sh tests/end_to_ends"
+                    sh "rm -rf tests/end_to_ends/temporary_data"
+                    script {
+                        def predictionResults
+                        dir ('tests/end_to_ends/tests_results/') {
+                            predictionResults = findFiles glob: '**'
+                        }
+                        publishHTML target: [
+                            keepAll              : false,
+                            reportDir            : 'tests/end_to_ends/tests_results/',
+                            reportFiles          : predictionResults.join(','),
+                            reportName           : 'Machine Learning Prediction Results'
+                        ]
+                    }
+
+                }
+            }
+        }
+        stage('Cloud Tests') {
+            steps {
+                withCredentials([
+                    file(credentialsId: 'PWRABILITY_GCP_DEV', variable: 'GOOGLE_CREDENTIALS_PATH'),
+                ]) {
+                    sh "./run_tests_on_dev_in_docker.sh tests/cloud"
+                }
+            }
+        }
+    }
+}

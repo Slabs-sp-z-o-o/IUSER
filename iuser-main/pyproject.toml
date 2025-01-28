@@ -1,0 +1,9 @@
+[tool.isort]
+profile = 'google'
+line_length = 120
+balanced_wrapping = true
+known_third_party = ['behave']
+known_first_party = ['steps']
+remove_redundant_aliases = true
+# float_to_top = true
+color_output = true

@@ -1,0 +1,116 @@
+version: '3.4'
+networks:
+  backend:
+    labels:
+      project: pwrability
+  test:
+    labels:
+      project: pwrability
+volumes:
+  db-data:
+    labels:
+      project: pwrability
+
+services:
+
+  rest:
+    build:
+      context: .
+      target: rest_server
+      labels:
+        project: pwrability
+        image: rest_server
+    depends_on: [db]
+    links: [db]
+    ports: ['5000'] # random TCP host port will be assigned for REST API
+    networks: [backend]
+    environment:
+      FLASK_ENV: production
+      FLASK_DEBUG: 'False'
+      FLASK_TESTING: 'False'
+      SQLALCHEMY_ECHO: 'False'
+      SQLALCHEMY_DATABASE_URI: mysql+mysqlconnector://api:apibar@db:3306/pa_api?charset=utf8mb4
+      NODES_API_USERNAME: 'foo'
+      NODES_API_PASSWORD: 'bar'
+    restart: on-failure
+
+  init_db:
+    build:
+      context: .
+      target: init_db
+      labels:
+        project: pwrability
+        image: init_db
+    depends_on: [db]
+    links: [db]
+    networks: [backend]
+    environment:
+      FLASK_ENV: production
+      FLASK_DEBUG: 'False'
+      FLASK_TESTING: 'False'
+      SQLALCHEMY_ECHO: 'False'
+      SQLALCHEMY_DATABASE_URI: mysql+mysqlconnector://api:apibar@db:3306/pa_api?charset=utf8mb4
+      CREATE_DB_TIMEOUT: 20
+      NODES_API_USERNAME: 'foo'
+      NODES_API_PASSWORD: 'bar'
+    restart: on-failure
+
+  tests:
+    build:
+      context: .
+      target: tests
+      labels:
+        project: pwrability
+        image: rest_api_tests
+    depends_on: [test_db]
+    links: [test_db]
+    networks: [test]
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: 'False'
+      FLASK_TESTING: 'False'
+      SQLALCHEMY_ECHO: 'False'
+      SQLALCHEMY_DATABASE_URI: mysql+mysqlconnector://api:apibar@test_db:3306/pa_api_test?charset=utf8mb4
+      NODES_API_USERNAME: 'foo'
+      NODES_API_PASSWORD: 'bar'
+      CREATE_DB_TIMEOUT: 20
+
+  db:
+    image: mysql/mysql-server:8.0.23
+    labels:
+      project: pwrability
+      image: rest_api_db
+    ports: ['3306'] # SQL API exposed to host, random TCP port will be assigned
+    environment:
+      MYSQL_ROOT_PASSWORD: bar
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: pa_api
+      MYSQL_USER: api
+      MYSQL_PASSWORD: apibar
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./my-root.cnf:/root/.my.cnf:ro
+    networks: [backend]
+    healthcheck:
+      test: bash -c 'cat /dev/null >/dev/tcp/localhost/3306'
+    restart: on-failure
+
+  test_db:
+    image: mysql/mysql-server:8.0.23
+    labels:
+      project: pwrability
+      image: rest_api_db
+    ports: ['3306'] # SQL API exposed to host, random TCP port will be assigned
+    environment:
+      MYSQL_ROOT_PASSWORD: bar
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: pa_api_test
+      MYSQL_USER: api
+      MYSQL_PASSWORD: apibar
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+      - ./my-root.cnf:/root/.my.cnf:ro
+    networks: [test]
+    healthcheck:
+      test: bash -c 'cat /dev/null >/dev/tcp/localhost/3306'

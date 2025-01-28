@@ -1,0 +1,12 @@
+FROM jupyter/base-notebook:lab-3.2.1
+COPY notebooks/requirements.txt /tmp
+RUN pip install -r /tmp/requirements.txt --no-cache-dir
+WORKDIR /home/jovyan/work
+
+ENV JUPYTER_ENABLE_LAB=yes
+# Some custom themes
+RUN mkdir -p /home/jovyan/.jupyter/lab; \
+    mkdir -p /home/jovyan/.jupyter/lab/user-settings;  \
+    mkdir -p /home/jovyan/.jupyter/lab/user-settings/\@jupyterlab; \
+    mkdir -p /home/jovyan/.jupyter/lab/user-settings/\@jupyterlab/apputils-extension
+RUN echo '{"theme": "Darcula",}' > /home/jovyan/.jupyter/lab/user-settings/\@jupyterlab/apputils-extension/themes.jupyterlab-settings

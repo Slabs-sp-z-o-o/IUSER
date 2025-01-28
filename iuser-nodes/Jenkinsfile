@@ -1,0 +1,76 @@
+pipeline {
+
+agent {
+    label 'iuser_build'
+}
+
+options {
+    timestamps()
+    timeout(time: 5, unit: 'MINUTES')
+}
+
+environment {
+    COMPOSE_PROJECT_NAME="${BUILD_TAG}"
+}
+
+stages {
+    stage('REST API build') {
+        steps {
+                sh 'docker-compose build'
+        }
+    }
+    stage('REST API UT') {
+        steps {
+            sh '''
+                    docker-compose run --rm --volume=${WORKSPACE}/output:/out tests \
+                        pytest -ra --log-level=info --new-first \
+                               -k "not efi_test" \
+                               --cov --cov-report term \
+                               --cov-report html:/out/rest_api_ut_cov_html_report \
+                               --junit-xml=/out/rest_api_ut.xml
+            '''
+        }
+    }
+    stage('REST API EFI') {
+        steps {
+                sh '''
+                    docker-compose run --rm --volume=${WORKSPACE}/output:/out tests \
+                        pytest -ra --log-level=info --log-cli-level=warning --new-first \
+                               -k efi_test \
+                               --junit-xml=/out/rest_api_efi.xml
+                '''
+        }
+    }
+}
+post {
+    always {
+        sh 'docker-compose down --remove-orphans --volumes --timeout 0'
+        junit 'output/rest_api_*.xml'
+        publishHTML (target : [alwaysLinkToLastBuild: true, keepAll: true,
+            reportDir: 'output/rest_api_ut_cov_html_report',
+            reportFiles: 'index.html',
+            reportName: 'REST API UT coverage',
+            reportTitles: 'REST API UT Coverage'])
+    }
+    cleanup {
+        sh 'docker image prune --force --all --filter label=project=gateway --filter until=24h'
+
+        // TODO: cleaning of images without label by name prefix
+        // sh "docker image ls --quiet --all 'jenkins-enalpha-pwrability*' | sort -u | xargs --no-run-if-empty docker rmi --force || true"
+
+        echo 'All remaining dockers from this project:'
+        sh '''
+            docker ps --all --filter label=project=pwrability
+            docker images --filter label=project=pwrability
+            docker volume ls --filter label=project=pwrability
+            docker network ls --filter label=project=pwrability
+        '''
+        sh '''
+            docker ps --all --filter name=jenkins-enalpha-pwrability
+            docker images 'jenkins-enalpha-pwrability*'
+            docker volume ls --filter name=jenkins-enalpha-pwrability
+            docker network ls --filter name=jenkins-enalpha-pwrability
+        '''
+    }
+}
+}

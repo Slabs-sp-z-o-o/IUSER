@@ -1,0 +1,11 @@
+connexion[swagger-ui]>=2.7
+SQLAlchemy>=1.3, <1.4
+Flask-SQLAlchemy>=2.5
+sqlalchemy-utils>=0.36
+mysql-connector-python>=8.0
+marshmallow-sqlalchemy>=0.24
+flask-marshmallow==0.14
+pytest>=6.2
+pytest-cov>=2.11
+WebTest>=2.0
+google-api-python-client==2.9.0

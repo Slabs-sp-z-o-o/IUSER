@@ -1,0 +1,958 @@
+openapi: 3.0.3
+info:
+  description: Functions used to manipulate compute nodes on analitycal platform
+  version: 0.0.9
+  title: EnAlpha analitycal platform API
+  contact:
+    name: EnAlpha
+    url: https://www.enalpha.pl/
+    email: Tomasz.Slodkowicz@enalpha.pl
+tags:
+- name: nodes
+  description: Functions used to manipulate compute nodes on analitycal platform
+- name: meters
+  description: Functions used to manipulate meters used by nodes
+- name: data anomalies
+  description: Functions used to manipulate tag data for ignoring during computation
+paths:
+  /ping:
+    get:
+      summary: Checks if the server is running
+      security: []
+      responses:
+        '204':
+          description: Server is up and running
+        default:
+          description: Something is wrong
+  /data_series_clone: # Dummy endpoint, for presentation purposes only
+    get:
+      summary: List all available data series
+      description: Retrieve list of all data series defined in system, used in
+        /nodes/{node}/data_view endpoint
+      operationId: api.series.search_clone
+      parameters:
+      - in: query
+        name: prefix
+        schema:
+          $ref: '#/components/schemas/SerieName'
+        allowEmptyValue: false
+        description: List only series with specified name prefix.
+      responses:
+        '200':
+          description: List of data series defined in system
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SerieNames'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /data_series:
+    get:
+      summary: List all available data series
+      description: Retrieve list of all data series defined in system, used in
+        /nodes/{node}/data_view endpoint
+      operationId: api.series.search
+      parameters:
+      - in: query
+        name: prefix
+        schema:
+          $ref: '#/components/schemas/SerieName'
+        allowEmptyValue: false
+        description: List only series with specified name prefix.
+      responses:
+        '200':
+          description: List of data series defined in system
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SerieNames'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /nodes:
+    get:
+      tags: [nodes]
+      summary: List all compute nodes
+      description: Retrieve list of all - active and not active - compute nodes
+      operationId: api.nodes.search
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+        allowEmptyValue: true
+        description: If true, the endpoint returns only the currently active nodes.
+      - in: query
+        name: location
+        schema:
+          $ref: '#/components/schemas/LocationId'
+        allowEmptyValue: false
+        description: List only nodes in specified location.
+      responses:
+        '200':
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                uniqueItems: true
+                items:
+                  allOf:
+                  - $ref: '#/components/schemas/NodeParams'
+                  - type: object
+                    required: [active_from, location]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      tags: [nodes]
+      summary: Create a new compute node
+      description: Create a new compute node with relations to location ID.
+        Default value for `active_from` is current time and null value for `active_to`.
+      operationId: api.nodes.post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNodeRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/Created'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /nodes/{node}:
+    parameters:
+    - name: node
+      in: path
+      description: ID of selected existing node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    get:
+      tags: [nodes]
+      summary: Get selected node data
+      description: Retrieve params of the compute node
+      operationId: api.nodes.get
+      parameters:
+      - in: query
+        name: full
+        schema:
+          type: boolean
+        allowEmptyValue: true
+        description: If true, the endpoint returns nested objects too.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeNested'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [nodes]
+      summary: Modify a compute node
+      description: Update parameters of existing node.
+      operationId: api.nodes.patch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeParams'
+            examples:
+              Deactivate node:
+                description: deactivating node at specified time (DELETE operation for
+                  node is not supported).
+                  Changing `active_to` date already set can return `501 Not Implemented`
+                value:
+                  active_to: '2021-10-03T13:00:00Z'
+              Fix incorrect start date:
+                description: overwriting incorrect `active_from` set at node creation
+                  can return `501 Not Implemented`.
+                value:
+                  active_from: '2020-02-01T00:00:00Z'
+              Fix incorrect location:
+                description: overwriting incorrect location set at node creation
+                  can return `501 Not Implemented`. location `id` should be changed to
+                  right value for updated values.
+                value:
+                  location:
+                    id: 1745
+                    country: Poland
+                    city: 950463
+                    post_code: 00-950
+                    street: 3839
+                    building: 7-9a
+                    lat: 39.7265625
+                    lon: 54.77534585936447
+      responses:
+        '200':
+          description: Node modified
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/NodeParams'
+                - type: object
+                  required: [active_from, location]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /nodes/{node}/data_view:
+    parameters:
+    - name: node
+      in: path
+      description: ID of parent node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    - in: query
+      name: serie_prefix
+      schema:
+        $ref: '#/components/schemas/SerieName'
+      allowEmptyValue: false
+      description: List only output series with specified name prefix.
+    get:
+      tags: [nodes]
+      summary: Get measurements query config
+      description: Returns details about database layout for accessing measurements
+        related to specified node.
+      operationId: api.nodes.get_cfg
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeConfigView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /nodes/{node}/data_view/{serie}:
+    parameters:
+    - name: node
+      in: path
+      description: ID of parent node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    - name: serie
+      in: path
+      description: name of selected data serie.
+      required: true
+      schema:
+        $ref: '#/components/schemas/SerieName'
+    get:
+      tags: [nodes]
+      summary: Get measurements query config for selected data serie
+      description: Returns details about database layout for accessing measurements
+        related to specified node and narrowed to single data serie.
+      operationId: api.nodes.get_cfg_one_serie
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeConfigView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /nodes/{node}/meters:
+    parameters:
+    - name: node
+      in: path
+      description: ID of parent node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    get:
+      tags: [meters]
+      summary: List all meters of compute node
+      description: will return empty array if node without meters is queried or all
+        defined meters are filtered out using query parameters
+      operationId: api.meters.search
+      parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+        allowEmptyValue: true
+        description: If true, the endpoint returns only the currently active meters.
+      - in: query
+        name: role
+        schema:
+          $ref: '#/components/schemas/MeterRole'
+        allowEmptyValue: false
+        description: List only meters with specified role.
+      - in: query
+        name: meter_id
+        schema:
+          $ref: '#/components/schemas/meter_id'
+        allowEmptyValue: false
+        description: List only meters with specified meter ID.
+      - in: query
+        name: gateway_id
+        schema:
+          $ref: '#/components/schemas/gateway_id'
+        allowEmptyValue: false
+        description: List only meters with specified gateway ID.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                uniqueItems: true
+                items:
+                  allOf:
+                  - $ref: '#/components/schemas/MeterParams'
+                  - type: object
+                    required: [gateway_id, meter_id, active_from, model, role]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [meters]
+      summary: Configure a new meter
+      description: Default value for `active_from` is current time and null value
+        for `active_to`.
+      operationId: api.meters.post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMeterRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/Created'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /nodes/{node}/meters/{meter}:
+    parameters:
+    - name: node
+      in: path
+      description: ID of parent node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    - name: meter
+      in: path
+      description: ID of selected existing meter.
+      required: true
+      schema:
+        $ref: '#/components/schemas/MeterId'
+    get:
+      tags: [meters]
+      summary: Get selected meter data
+      description: Retrieve configuration params of the meter device
+      operationId: api.meters.get
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/MeterParams'
+                - type: object
+                  required: [gateway_id, meter_id, active_from, model, role]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [meters]
+      summary: Modify a meter instance
+      description: Update parameters of existing meter instance definition.
+      operationId: api.meters.patch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeterParams'
+            examples:
+              Deactivate meter:
+                description: deactivating meter at specified time (DELETE operation for
+                  metere is not supported).
+                  Changing `active_to` date already set can return `501 Not Implemented`
+                value:
+                  active_to: '2021-10-03T13:00:00Z'
+              Fix incorrect start date:
+                description: overwriting incorrect `active_from` set at meter creation
+                  can return `501 Not Implemented`.
+                value:
+                  active_from: '2020-02-01T00:00:00Z'
+              Fix incorrect gateway_id:
+                description: overwriting incorrect gateway ID set at meter creation
+                  can return `501 Not Implemented`.
+                value:
+                  gateway_id: GW2345678901
+      responses:
+        '200':
+          description: Meter definition modified
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/MeterParams'
+                - type: object
+                  required: [gateway_id, meter_id, active_from, model, role]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /nodes/{node}/meters/{meter}/anomalies:
+    parameters:
+    - name: node
+      in: path
+      description: ID of parent node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    - name: meter
+      in: path
+      description: ID of meter object.
+      required: true
+      schema:
+        $ref: '#/components/schemas/MeterId'
+    get:
+      tags: [data anomalies]
+      summary: List all anomalies defined for selected meter
+      operationId: api.anomalies.search
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                uniqueItems: true
+                items:
+                  $ref: '#/components/schemas/AnomalyParams'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [data anomalies]
+      summary: Define new anlomaly period for meter
+      operationId: api.anomalies.post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnomalyParams'
+      responses:
+        '201':
+          $ref: '#/components/responses/Created'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /nodes/{node}/meters/{meter}/anomalies/{anomaly}:
+    parameters:
+    - name: node
+      in: path
+      description: ID of parent node.
+      required: true
+      schema:
+        $ref: '#/components/schemas/NodeId'
+    - name: meter
+      in: path
+      description: ID of meter object.
+      required: true
+      schema:
+        $ref: '#/components/schemas/MeterId'
+    - name: anomaly
+      in: path
+      description: ID of anomaly object.
+      required: true
+      schema:
+        $ref: '#/components/schemas/AnomalyId'
+    get:
+      tags: [data anomalies]
+      summary: Get selected anomaly
+      operationId: api.anomalies.get
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyParams'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [data anomalies]
+      summary: Redefine selected anomaly
+      operationId: api.anomalies.put
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnomalyParams'
+      responses:
+        '204':
+          description: Anomaly updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [data anomalies]
+      summary: Delete selected anomaly
+      operationId: api.anomalies.delete
+      responses:
+        '204':
+          description: Anomaly deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+security:
+  - admin_password: []
+servers:
+- url: /v1
+components:
+  securitySchemes:
+    admin_password:
+      type: http
+      scheme: basic
+      x-basicInfoFunc: auth.basic_auth
+  responses:
+    Created:
+      description: Resource created
+      headers:
+        Location:
+          schema:
+            type: string
+            format: uri
+            example: /node/356/meter/3
+          description: URI to acces newly created resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreatedObjectId'
+    NotFound:
+      description: The specified resource was not found
+      content:
+        'application/problem+json':
+          schema:
+            $ref: 'https://opensource.zalando.com/restful-api-guidelines/problem-1.0.1.yaml#/Problem'
+          example:
+            type: about:blank
+            title: Specified resource not found
+            status: 404
+            detail: Node with specified ID does not exist
+    UnprocessableEntity:
+      description: The request was well-formed but was unable to be followed due to
+        semantic errors
+      content:
+        'application/problem+json':
+          schema:
+            $ref: 'https://opensource.zalando.com/restful-api-guidelines/problem-1.0.1.yaml#/Problem'
+          example:
+            type: about:blank
+            title: Invalid object definition
+            status: 422
+            detail: Node end date must be later then start date
+    Conflict:
+      description: Indicates that the request could not be processed because of conflict
+        in the current state of the resource
+      content:
+        'application/problem+json':
+          schema:
+            $ref: 'https://opensource.zalando.com/restful-api-guidelines/problem-1.0.1.yaml#/Problem'
+          example:
+            type: about:blank
+            title: Conflict with a parent object
+            status: 409
+            detail: Meter start date is earlier then node's date
+    BadRequest:
+      description: Invalid input
+      content:
+        'application/problem+json':
+          schema:
+            $ref: 'https://opensource.zalando.com/restful-api-guidelines/problem-1.0.1.yaml#/Problem'
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            detail: Extra query parameter xxx not in spec
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            pattern: ^Basic realm=
+            example: 'Basic realm="Login Required"'
+      content:
+        'application/problem+json':
+          schema:
+            $ref: 'https://opensource.zalando.com/restful-api-guidelines/problem-1.0.1.yaml#/Problem'
+          example:
+            type: about:blank
+            title: Unauthorized
+            status: 401
+            detail: No authorization token provided
+    NotImplemented:
+      description: Not Implemented
+      content:
+        'application/problem+json':
+          schema:
+            $ref: 'https://opensource.zalando.com/restful-api-guidelines/problem-1.0.1.yaml#/Problem'
+          example:
+            type: about:blank
+            title: Not Implemented
+            status: 501
+            detail: module 'api.meters' has no attribute 'patch'
+  schemas:
+    NodeId:
+      type: integer
+      format: int64
+      minimum: 1
+      description: compute node unique ID
+      example: 5334
+      readOnly: true
+    MeterId:
+      type: integer
+      format: int64
+      minimum: 1
+      description: unique ID of the meter instance in the node context
+      example: 124
+      readOnly: true
+    meter_id:
+      type: string
+      minLength: 1
+      description: label of the meter device as configured at gateway
+      example: met13
+    gateway_id:
+      type: string
+      pattern: ^GW(TMP|DEV|[0-9]{3})[0-9]{7}$
+      description: ID of the gateway device as configured at gateway
+      example: GW2103040011
+    AnomalyId:
+      type: integer
+      format: int64
+      minimum: 1
+      description: unique ID of the anomaly instance
+      example: 17
+      readOnly: true
+    LocationId:
+      type: integer
+      format: int64
+      description: The identifier of the location (external key).
+        userId can be aquired by query to external db using this location ID.
+      example: 9223372036854775807
+      nullable: false
+    CreatedObjectId:
+      anyOf:
+      - $ref: '#/components/schemas/NodeId'
+      - $ref: '#/components/schemas/MeterId'
+      - $ref: '#/components/schemas/AnomalyId'
+      description: unique ID of newly created resource
+    CreateNodeRequest:
+      allOf:
+      - $ref: '#/components/schemas/NodeParams'
+      - type: object
+        required: [active_from, location]
+    CreateMeterRequest:
+      allOf:
+      - $ref: '#/components/schemas/MeterParams'
+      - type: object
+        required: [gateway_id, meter_id, active_from, model, role]
+    NodeNested:
+      type: object
+      description: A compute node definition with nested objects attached
+      allOf:
+      - $ref: '#/components/schemas/NodeParams'
+      - type: object
+        required: [active_from, location]
+      - type: object
+        nullable: true
+        properties:
+          meters:
+            type: array
+            uniqueItems: true
+            items:
+              allOf:
+              - $ref: '#/components/schemas/MeterParams'
+              - type: object
+                required: [gateway_id, meter_id, active_from, model, role]
+              - type: object
+                nullable: true
+                properties:
+                  anomalies:
+                    type: array
+                    uniqueItems: true
+                    items:
+                      $ref: '#/components/schemas/AnomalyParams'
+    NodeParams:
+      type: object
+      description: A compute node definition
+      properties:
+        id:
+          $ref: '#/components/schemas/NodeId'
+        active_from:
+          type: string
+          format: date-time
+          description: defines node validity period start
+        active_to:
+          type: string
+          format: date-time
+          description: defines node validity period end
+          nullable: true
+        location:
+          allOf:
+          - type: object
+            description: reference to the location the node belongs to
+            properties:
+              id:
+                $ref: '#/components/schemas/LocationId'
+              lat:
+                description: geo coordinate - latitude
+                type: number
+                minimum: -90
+                maximum: 90
+                example: 39.7265625
+              lon:
+                description: geo coordinate - longitude
+                type: number
+                minimum: -180
+                maximum: 180
+                example: 54.77534585936447
+          - $ref: '#/components/schemas/Address'
+          required:
+          - id
+          - post_code
+      required:
+      - id
+    NodeConfigView:
+      type: array
+      description: List of query configuration records
+      uniqueItems: true
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          node_id:
+            $ref: '#/components/schemas/NodeId'
+          output_series:
+            $ref: '#/components/schemas/SerieName'
+          gateway_id:
+            $ref: '#/components/schemas/gateway_id'
+          meter_id:
+            $ref: '#/components/schemas/meter_id'
+          database:
+            type: string
+            minLength: 1
+            example: iot_warehouse
+          table:
+            type: string
+            minLength: 1
+            example: electrical_measurements
+          column:
+            type: string
+            minLength: 1
+            example: ea_fwd_2
+          description:
+            type: string
+            nullable: true
+          operation:
+            type: string
+            enum: [plus, minus]
+          date_from:
+            type: string
+            format: date-time
+          date_to:
+            type: string
+            format: date-time
+            nullable: true
+          cumulative:
+            type: boolean
+          anomaly:
+            type: boolean
+        required:
+        - node_id
+        - output_series
+        - meter_id
+        - gateway_id
+        - database
+        - table
+        - column
+        - operation
+        - date_from
+        - date_to
+        - cumulative
+        - anomaly
+    MeterRole:
+      type: string
+      enum: [input_home, inverter, meter]
+    MeterParams:
+      type: object
+      description: An installed physical meter description
+      properties:
+        id:
+          $ref: '#/components/schemas/MeterId'
+        active_from:
+          type: string
+          format: date-time
+          description: defines node validity period start
+        active_to:
+          type: string
+          format: date-time
+          description: defines node validity period end
+          nullable: true
+        gateway_id:
+          $ref: '#/components/schemas/gateway_id'
+        meter_id:
+          $ref: '#/components/schemas/meter_id'
+        model:
+          type: string
+          enum: [orno, fif]
+          default: fif
+        role:
+          $ref: '#/components/schemas/MeterRole'
+      required:
+      - id
+    AnomalyParams:
+      type: object
+      description: Period of meter device malfunction
+      properties:
+        id:
+          $ref: '#/components/schemas/AnomalyId'
+        begin:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+      required: [id, begin, end]
+      additionalProperties: false
+    Address:
+      type: object
+      description: node location address from external database
+      properties:
+        country:
+          type: string
+          enum: [Poland]
+        city:
+          type: integer
+          format: int64
+          example: 950463
+          description: symbol miejscowości z TERYT (SIMC.SYM lub SIMC.SYMPOD), 950463 = Kraków
+        post_code:
+          type: string
+          pattern: ^[0-9]{2}-[0-9]{3}$
+          example: 00-950
+        street:
+          type: integer
+          format: int64
+          example: 3839
+          description: symbol nazwy ulicy z TERYT (ULIC.SYM_UL), 3839 = ul. Długa
+          nullable: true
+        building:
+          type: string
+          pattern: ^[1-9]
+          maxLength: 15
+          example: 7-9a
+        flat:
+          type: string
+          pattern: ^[1-9]
+          maxLength: 15
+          example: 23a
+          nullable: true
+      required: [country, post_code]
+    SerieName:
+      description: Data serie name used as serie ID
+      type: string
+      minLength: 1
+      nullable: false
+      example: energy_usage
+    SerieNames:
+      type: array
+      description: List of data serie names
+      uniqueItems: true
+      items:
+        $ref: '#/components/schemas/SerieName'
+      example: [real_energy_export, real_energy_import, ghi, ghi10, ghi90, cloud_opacity]
